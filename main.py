@@ -52,7 +52,7 @@ for key, value in CONFIG.items():
     if value <= 0:
         raise ValueError(f"The {key} must be bigger than 0, got {value}")
 
-print(CONFIG.items())
+# print(CONFIG.items())
 #####################################
 
 ########## DB handling ##########
@@ -93,3 +93,42 @@ try:
 except Exception as err:
     raise err_type(err_msg.format(name=type(err).__name__, msg=err))
 #################################
+
+########## command line arguments parsing ##########
+from argparse import ArgumentParser, RawTextHelpFormatter
+
+parser: ArgumentParser = ArgumentParser(
+    prog="Detergent Tracker",
+    description="""
+This app has been created to track usage of detergent.
+
+Before using the app, I strongly advice to fill the config file and attach it, otherwise the app will work in an unexpected way or not run at all. The following config options are available:
+    - Bottle_volume: float > 0 (decimal “.” Separated, not integer separator)
+    - Cup_volume: float > 0 (decimal “.” Separated, not integer separator)""",
+    epilog="Advise README.md to learn the run procedure.",
+    formatter_class=RawTextHelpFormatter
+)
+
+parser.add_argument(
+    "-l", "--log",
+    action="store",
+    nargs=1,
+    type=float,
+    dest="n_cups",
+    help="input the number of cups used in the last wash."
+)
+
+parser.add_argument(
+    "-s", "--status",
+    action="store_true",
+    help="show a status report of the current detergent."
+)
+
+parser.add_argument(
+    "--reset",
+    action="store_true",
+    help="reset all data to defaults."
+)
+
+args = vars(parser.parse_args())
+print(args)
