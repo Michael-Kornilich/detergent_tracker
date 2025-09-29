@@ -1,8 +1,7 @@
-import sys
-import traceback
-import json
-
 # for prod, to have nice errors
+# import sys
+# import traceback
+#
 # def custom_exception_handler(
 #         exc_type: BaseException | None,
 #         exc_value: BaseException | None,
@@ -24,6 +23,8 @@ import json
 # sys.excepthook = custom_exception_handler
 
 ########## config handling ##########
+import json
+
 with open("default_config.json", mode="r") as file:
     DEFAULT_CONFIG: dict[str, float] = json.load(file)
 
@@ -50,4 +51,45 @@ for key, value in CONFIG.items():
         raise TypeError(f"The {key} must be a real number, got '{type(value).__name__}'.")
     if value <= 0:
         raise ValueError(f"The {key} must be bigger than 0, got {value}")
+
+print(CONFIG.items())
 #####################################
+
+########## DB handling ##########
+import sqlite3
+from sqlite3 import Connection, Cursor
+from os import path
+
+if not path.exists("./database"):
+    raise FileNotFoundError("The database directory does not exist. "
+                            "Make sure you create a 'database/' directory or "
+                            "mount a named volume 'database' when launching the container.")
+
+if path.exists("./database/database.db"):
+    err_type = ImportError
+    err_msg = "Failed to load the database: {name} – {msg}"
+else:
+    print("Database does not exist. Creating a new one.")
+    err_type = RuntimeError
+    err_msg = "An unexpected error occurred while trying to create the database: {name} – {msg}"
+
+try:
+    conn: Connection = sqlite3.connect("./database/database.db")
+    cur: Cursor = conn.cursor()
+
+    # prevent PyCharm from complaining
+    # noinspection SqlNoDataSourceInspection
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS usage_data (
+    	date INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    	n_cups REAL NOT NULL,
+    	volume_used REAL NOT NULL,
+
+    	PRIMARY KEY (date ASC) ON CONFLICT FAIL,
+    	CONSTRAINT valid_cups CHECK (n_cups >= 0),
+    	CONSTRAINT valid_valid_used CHECK (volume_used >= 0)
+    );
+    """)
+except Exception as err:
+    raise err_type(err_msg.format(name=type(err).__name__, msg=err))
+#################################
