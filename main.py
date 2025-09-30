@@ -77,30 +77,27 @@ def load_config(
     return CONFIG
 
 
-def load_database(
-        db_fp: str = "./database/",
-        db_name: str = "database.db"
-) -> tuple[Connection, Cursor]:
+def init_database(_db_path: str = "./database/database.db") -> None:
     """
-    Creates a database at db_fp + db_name (if it does not exist) and loads it.\n
-    Assumes that os library is available
+    Validate and / or initialize a database at db_fp + db_name if it doesn't exist.\n
+    Assumes that pathlib library is available
 
-    :param db_fp: Filepath to the database's directory
-    :param db_name: Name of the database in the db_fp directory
-    :return: Closed Connection & Cursor objects
+    :param _db_path: Filepath to the database
+    :return: None
     :raises FileNotFound: if the specified DB directory does not exist
     :raises RuntimeError, ImportError: if the database file could not be loaded
     """
-    from os import path
+    from pathlib import Path
+    db_path = Path(_db_path)
 
-    if not path.exists(db_fp):
+    if not db_path.parent.exists():
         raise FileNotFoundError(f"The database directory does not exist. "
-                                f"Make sure you create a 'database/' directory or "
-                                f"mount a named volume 'database' when launching the container.")  # FIX: static error message
+                                f"Make sure you create a '{db_path.parent}' directory or "
+                                f"mount a named volume '{db_path.parent}' when launching the container.")
 
     # Since .connect(db_path) has either connect-behavior or load behavior,
     # we do case distinction for errors depending on whether the DB exists or not
-    if path.exists(db_fp + db_name):
+    if db_path.exists():
         err_type = ImportError
         err_msg = "Failed to connect the database: {name} – {msg}"
     else:
@@ -109,7 +106,7 @@ def load_database(
         print("Database not found. Creating a new one.")
 
     try:
-        conn: Connection = sqlite3.connect(db_fp + db_name)
+        conn: Connection = sqlite3.connect(db_path)
         cur: Cursor = conn.cursor()
 
         # prevent PyCharm from complaining
@@ -130,7 +127,7 @@ def load_database(
     except Exception as err:
         raise err_type(err_msg.format(name=type(err).__name__, msg=err))
 
-    return conn, cur
+    return
 
 
 ########## command line arguments parsing ##########
@@ -178,7 +175,7 @@ if (n_specified := sum(map(bool, kwargs.values()))) > 2:
 if kwargs["reset"] and (kwargs["status"] or kwargs["n_cups"]):
     raise ValueError("Reset flag must not have any flags along with it.")
 
-# logging logic
+######## logging logic ########
 if (n_cups := kwargs["n_cups"]) is not None:
     CONFIG: dict[str, float] = load_config()
     last_wash_volume: float = n_cups * CONFIG["cup_volume"]
@@ -191,26 +188,29 @@ if (n_cups := kwargs["n_cups"]) is not None:
             f" exceeds the total volume of the detergent {CONFIG["bottle_volume"]} liters."
             f" You may need to adjust cup and / or bottle volumes in your config and relaunch the app.")
 
-    conn, cur = load_database()
-    conn: Connection
-    cur: Cursor
+    db_path: str = "./database/database.db"
+    init_database(db_path)
 
-    # noinspection SqlNoDataSourceInspection
-    volume_used = cur.execute("SELECT SUM(volume_used) FROM usage_data").fetchall()[0][0] or 0
-    if CONFIG["bottle_volume"] - volume_used < last_wash_volume:
-        raise ValueError(f"The most recent volume of detergent ({last_wash_volume}) "
-                         f"exceeds the (expected) volume left ({CONFIG["bottle_volume"] - volume_used})")
+    # isolation_level = None == auto-commits
+    with sqlite3.connect(db_path, isolation_level=None) as conn:
+        conn: Connection
 
-    try:
         # noinspection SqlNoDataSourceInspection
-        cur.execute(
-            "INSERT INTO usage_data (n_cups, volume_used) VALUES (?, ?)",
-            (n_cups, last_wash_volume))
-    except Exception as err:
-        raise SystemError(f"Unable to insert data: {type(err).__name__} - {err}. Try again later.")
-    cur.close()
-    conn.close()
+        volume_used: float = float(conn.execute("SELECT SUM(volume_used) FROM usage_data").fetchall()[0][0] or 0.0)
+        if CONFIG["bottle_volume"] - volume_used < last_wash_volume:
+            raise ValueError(f"The most recent volume of detergent used ({last_wash_volume}) "
+                             f"exceeds the (expected) volume left ({CONFIG["bottle_volume"] - volume_used})")
+
+        try:
+            # noinspection SqlNoDataSourceInspection
+            conn.execute(
+                "INSERT INTO usage_data (n_cups, volume_used) VALUES (?, ?)",
+                (n_cups, last_wash_volume))
+        except Exception as err:
+            raise SystemError(f"Unable to insert data: {type(err).__name__} - {err}. Try again later.")
+
     print("Recorded successfully!")
+###############################
 
 if kwargs["status"]:
     print("Here is your status report!")
