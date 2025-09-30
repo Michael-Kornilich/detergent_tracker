@@ -234,6 +234,7 @@ if (n_cups := kwargs["n_cups"]) is not None:
 ###############################
 
 ######## status flag logic ########
+# TODO: when changing config mid-run to a smaller bottle volume, a usage percentage may be > 1.
 if kwargs["status"]:
     from datetime import datetime
 
@@ -249,7 +250,7 @@ if kwargs["status"]:
         FROM usage_data;
         """).fetchone()
 
-        first_timestamp: int = res[0] or datetime.now().strftime("%s")
+        first_timestamp: int = res[0] or int(datetime.now().strftime("%s"))
         earliest_date: str = datetime.fromtimestamp(first_timestamp).strftime("%d.%m.%Y")
 
         total_used: float = res[1] or 0.0
@@ -262,6 +263,33 @@ if kwargs["status"]:
     print(display_load(1 - (total_used / CONFIG["bottle_volume"])))
 ############################
 
+######## resetting logic ########
+if kwargs["reset"]:
+    if input("Do you really want to delete all your data [n/Y]: ") == "Y":
+        db_path: str = "./database/database.db"
+        init_database(db_path)
 
-if kwargs["reset"] and input("Do you really want to delete all your data [n/Y]: ") == "Y":
-    print("Deleting data")
+        with sqlite3.connect(db_path, isolation_level=None) as conn:
+            conn.executescript("""
+            DROP TABLE usage_data;
+            
+            CREATE TABLE IF NOT EXISTS usage_data (
+                    date INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') as INT)),
+                    n_cups REAL NOT NULL,
+                    volume_used REAL NOT NULL,
+    
+                    UNIQUE (date),
+                    CONSTRAINT valid_cups CHECK (n_cups >= 0),
+                    CONSTRAINT valid_valid_used CHECK (volume_used >= 0)
+                );
+            """)
+        print("Your data has successfully been deleted")
+
+    if input("Do you wish to revert the config file to default options [y/n]? ") == "y":
+        with open("CONFIG.json", mode="w") as new_config:
+            with open("default_config.json", mode="r") as def_config:
+                new_config.write(def_config.read())
+        print("The config has been successfully reverted to its default options.")
+
+    print("All done!")
+#################################
