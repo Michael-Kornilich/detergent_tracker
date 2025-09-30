@@ -2,30 +2,35 @@
 import sqlite3
 from sqlite3 import Connection, Cursor
 
-
 # for prod, to have nice errors
-# import sys
-# import traceback
-#
-# def custom_exception_handler(
-#         exc_type: BaseException | None,
-#         exc_value: BaseException | None,
-#         exc_traceback
-# ) -> None:
-#     """
-#     Custom exception handler, that always raises a RuntimeException as a wrapper to an (unaccounted-for) error
-#     :param exc_type: Type of the error
-#     :param exc_value: Exception value (message)
-#     :param exc_traceback: Traceback
-#     :return: None
-#     """
-#     print(f"An unaccounted-for error occurred: {exc_type.__name__} – {exc_value}.\n"
-#           f"Contact the maintainer for help at 'molego16@gmail.com'.")
-#     traceback.print_tb(exc_traceback)
-#     return
-#
-#
-# sys.excepthook = custom_exception_handler
+import sys
+import traceback
+
+
+def custom_exception_handler(
+        exc_type: BaseException | None,
+        exc_value: BaseException | None,
+        exc_traceback
+) -> None:
+    """
+    Custom exception handler, that always raises a RuntimeException as a wrapper to an (unaccounted-for) error
+    :param exc_type: Type of the error
+    :param exc_value: Exception value (message)
+    :param exc_traceback: Traceback
+    :return: None
+    """
+    print(f"An unaccounted-for error occurred: {exc_type.__name__} – {exc_value}.\n"
+          f"It might have been cause by changes in the config file mid-tracking. "
+          f"This is a known issue and can (unfortunately) only be fixed "
+          f"by deleting all the prerecorded data (with --reset flag)."
+          f"If a data deletion did not help, "
+          f"save this message and contact the maintainer for help at 'molego16@gmail.com'.")
+    traceback.print_tb(exc_traceback)
+    return
+
+
+sys.excepthook = custom_exception_handler
+
 
 def load_config(
         fp_config: str = "CONFIG.json",
@@ -54,25 +59,25 @@ def load_config(
         with open(fp_config, mode="r") as file:
             CONFIG: dict[str, float] = json.load(file)
     except Exception as err:
-        raise ImportError(f"An error occurred while reading config: {type(err).__name__} – {err}.\n"
-                          f"Visit https://github.com/Michael-Kornilich/detergent_tracker to see the manual "
-                          f"on how to handle the config and / or restore its default contents.")
+        quit(print(f"An error occurred while reading config: {type(err).__name__} – {err}.\n"
+                   f"Visit https://github.com/Michael-Kornilich/detergent_tracker to see the manual "
+                   f"on how to handle the config and / or restore its default contents."))
 
     # checking against the default config accounts for possible future changes in the config
     if (got_len := len(CONFIG.keys())) != (exp_len := len(default_config.keys())):
         rel = "more" if got_len > exp_len else "less"
-        raise ValueError(f"An error occurred while parsing config file. "
-                         f"There are {rel} keys (got {got_len}) than expected ({exp_len})")
+        quit(print(f"An error occurred while parsing config file. "
+                   f"There are {rel} keys (got {got_len}) than expected ({exp_len})"))
 
     if (got_keys := sorted(CONFIG.keys())) != (exp_keys := sorted(default_config.keys())):
-        raise ValueError(f"An error occurred while parsing config file. "
-                         f"The expected keys ({", ".join(exp_keys)}) don’t match the actual ones: {", ".join(got_keys)}")
+        quit(print(f"An error occurred while parsing config file. "
+                   f"The expected keys ({", ".join(exp_keys)}) don't match the actual ones: {", ".join(got_keys)}"))
 
     for key, value in CONFIG.items():
         if type(value) not in (int, float):
-            raise TypeError(f"The {key} must be a real number, got '{type(value).__name__}'.")
+            quit(print(f"The {key} must be a real number, got '{type(value).__name__}'."))
         if value <= 0:
-            raise ValueError(f"The {key} must be bigger than 0, got {value}")
+            quit(print(f"The {key} must be bigger than 0, got {value}"))
 
     return CONFIG
 
@@ -91,17 +96,15 @@ def init_database(_db_path: str = "./database/database.db") -> None:
     db_path = Path(_db_path)
 
     if not db_path.parent.exists():
-        raise FileNotFoundError(f"The database directory does not exist. "
-                                f"Make sure you create a '{db_path.parent}' directory or "
-                                f"mount a named volume '{db_path.parent}' when launching the container.")
+        quit(print(f"The database directory does not exist. "
+                   f"Make sure you create a '{db_path.parent}' directory or "
+                   f"mount a named volume '{db_path.parent}' when launching the container."))
 
     # Since .connect(db_path) has either connect-behavior or load behavior,
     # we do case distinction for errors depending on whether the DB exists or not
     if db_path.exists():
-        err_type = ImportError
         err_msg = "Failed to connect the database: {name} – {msg}"
     else:
-        err_type = RuntimeError
         err_msg = "An unexpected error occurred while trying to create the database: {name} – {msg}"
         print("Database not found. Creating a new one.")
 
@@ -116,7 +119,7 @@ def init_database(_db_path: str = "./database/database.db") -> None:
             date INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') as INT)),
             n_cups REAL NOT NULL,
             volume_used REAL NOT NULL,
-    
+
             UNIQUE (date),
             CONSTRAINT valid_cups CHECK (n_cups >= 0),
             CONSTRAINT valid_valid_used CHECK (volume_used >= 0)
@@ -125,16 +128,16 @@ def init_database(_db_path: str = "./database/database.db") -> None:
         cur.close()
         conn.close()
     except Exception as err:
-        raise err_type(err_msg.format(name=type(err).__name__, msg=err))
+        quit(print(err_msg.format(name=type(err).__name__, msg=err)))
 
     return
 
 
 def display_load(pct_load: float | int, /) -> str:
     if type(pct_load) not in (float, int):
-        raise TypeError(f"The percentage load (pct_load) must be an int or a float, got {type(pct_load)}")
+        quit(print(f"The percentage load (pct_load) must be an int or a float, got {type(pct_load)}"))
     if pct_load > 1 or pct_load < 0:
-        raise ValueError(f"The percentage load (pct_load) must be 0 <= x <= 1, got {pct_load} instead")
+        quit(print(f"The percentage load (pct_load) must be 0 <= x <= 1, got {pct_load} instead"))
 
     from os import get_terminal_size
     from warnings import warn
@@ -142,7 +145,7 @@ def display_load(pct_load: float | int, /) -> str:
     try:
         n_symbols = get_terminal_size()[0] - 2
     except Exception as err:
-        warn(f"Unable to read terminal window size, defaulting to 100 + 2 charachters. "
+        warn(f"Unable to read terminal window size, defaulting to 100 + 2 characters. "
              f"({type(err).__name__} - {err})", RuntimeWarning)
         n_symbols = 100
 
@@ -159,8 +162,8 @@ parser: ArgumentParser = ArgumentParser(
 This app has been created to track usage of detergent.
 
 Before using the app, I strongly advice to fill the config file and attach it, otherwise the app will work in an unexpected way or not run at all. The following config options are available:
-    - Bottle_volume: float > 0 (decimal “.” Separated, not integer separator)
-    - Cup_volume: float > 0 (decimal “.” Separated, not integer separator)""",
+    - Bottle_volume: float > 0 (decimal "." Separated, not integer separator)
+    - Cup_volume: float > 0 (decimal "." Separated, not integer separator)""",
     epilog="""
 You can only use ONE flag per call. The only exception is '--log <n-cups> --status'.
 The date format is DD.MM.YYYY.
@@ -192,9 +195,9 @@ parser.add_argument(
 kwargs: dict[str, float | bool] = vars(parser.parse_args())
 
 if (n_specified := sum(map(bool, kwargs.values()))) > 2:
-    raise ValueError(f"You can add at most 2 flags. {n_specified} were added instead.")
+    quit(print(f"You can add at most 2 flags. {n_specified} were added instead."))
 if kwargs["reset"] and (kwargs["status"] or kwargs["n_cups"]):
-    raise ValueError("Reset flag must not have any flags along with it.")
+    quit(print("Reset flag must not have any flags along with it."))
 
 ######## logging logic ########
 if (n_cups := kwargs["n_cups"]) is not None:
@@ -202,12 +205,12 @@ if (n_cups := kwargs["n_cups"]) is not None:
     last_wash_volume: float = n_cups * CONFIG["cup_volume"]
 
     if n_cups < 0:
-        raise ValueError(f"Number of cups must be non-negative, got {n_cups}")
+        quit(print(f"Number of cups must be non-negative, got {n_cups}"))
     if last_wash_volume > CONFIG["bottle_volume"]:
-        raise ValueError(
+        quit(print(
             f"The volume most recently used ({n_cups} cups * {CONFIG["cup_volume"]} liters = {last_wash_volume} liters)"
             f" exceeds the total volume of the detergent {CONFIG["bottle_volume"]} liters."
-            f" You may need to adjust cup and / or bottle volumes in your config and relaunch the app.")
+            f" You may need to adjust cup and / or bottle volumes in your config and relaunch the app."))
 
     db_path: str = "./database/database.db"
     init_database(db_path)
@@ -219,8 +222,8 @@ if (n_cups := kwargs["n_cups"]) is not None:
         # noinspection SqlNoDataSourceInspection
         volume_used: float = float(conn.execute("SELECT SUM(volume_used) FROM usage_data").fetchone()[0] or 0.0)
         if CONFIG["bottle_volume"] - volume_used < last_wash_volume:
-            raise ValueError(f"The most recent volume of detergent used ({last_wash_volume}) "
-                             f"exceeds the (expected) volume left ({CONFIG["bottle_volume"] - volume_used})")
+            quit(print(f"The most recent volume of detergent used ({last_wash_volume}) "
+                       f"exceeds the (expected) volume left ({CONFIG["bottle_volume"] - volume_used})"))
 
         try:
             # noinspection SqlNoDataSourceInspection
@@ -228,7 +231,7 @@ if (n_cups := kwargs["n_cups"]) is not None:
                 "INSERT INTO usage_data (n_cups, volume_used) VALUES (?, ?)",
                 (n_cups, last_wash_volume))
         except Exception as err:
-            raise SystemError(f"Unable to insert data: {type(err).__name__} - {err}. Try again later.")
+            quit(print(f"Unable to insert data: {type(err).__name__} - {err}. Try again later."))
 
     print("Recorded successfully!")
 ###############################
@@ -270,14 +273,15 @@ if kwargs["reset"]:
         init_database(db_path)
 
         with sqlite3.connect(db_path, isolation_level=None) as conn:
+            # noinspection SqlNoDataSourceInspection
             conn.executescript("""
             DROP TABLE usage_data;
-            
+
             CREATE TABLE IF NOT EXISTS usage_data (
                     date INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') as INT)),
                     n_cups REAL NOT NULL,
                     volume_used REAL NOT NULL,
-    
+
                     UNIQUE (date),
                     CONSTRAINT valid_cups CHECK (n_cups >= 0),
                     CONSTRAINT valid_valid_used CHECK (volume_used >= 0)
