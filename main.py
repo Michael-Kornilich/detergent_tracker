@@ -130,6 +130,26 @@ def init_database(_db_path: str = "./database/database.db") -> None:
     return
 
 
+def display_load(pct_load: float | int, /) -> str:
+    if type(pct_load) not in (float, int):
+        raise TypeError(f"The percentage load (pct_load) must be an int or a float, got {type(pct_load)}")
+    if pct_load > 1 or pct_load < 0:
+        raise ValueError(f"The percentage load (pct_load) must be 0 <= x <= 1, got {pct_load} instead")
+
+    from os import get_terminal_size
+    from warnings import warn
+
+    try:
+        n_symbols = get_terminal_size()[0] - 2
+    except Exception as err:
+        warn(f"Unable to read terminal window size, defaulting to 100 + 2 charachters. "
+             f"({type(err).__name__} - {err})", RuntimeWarning)
+        n_symbols = 100
+
+    n_full_symbols = round(n_symbols * pct_load)
+    return "[" + ("#" * n_full_symbols) + (" " * (n_symbols - n_full_symbols)) + "]"
+
+
 ########## command line arguments parsing ##########
 from argparse import ArgumentParser, RawTextHelpFormatter
 
@@ -143,6 +163,7 @@ Before using the app, I strongly advice to fill the config file and attach it, o
     - Cup_volume: float > 0 (decimal “.” Separated, not integer separator)""",
     epilog="""
 You can only use ONE flag per call. The only exception is '--log <n-cups> --status'.
+The date format is DD.MM.YYYY.
 Advise README.md to learn the run procedure.""",
     formatter_class=RawTextHelpFormatter
 )
@@ -196,7 +217,7 @@ if (n_cups := kwargs["n_cups"]) is not None:
         conn: Connection
 
         # noinspection SqlNoDataSourceInspection
-        volume_used: float = float(conn.execute("SELECT SUM(volume_used) FROM usage_data").fetchall()[0][0] or 0.0)
+        volume_used: float = float(conn.execute("SELECT SUM(volume_used) FROM usage_data").fetchone()[0] or 0.0)
         if CONFIG["bottle_volume"] - volume_used < last_wash_volume:
             raise ValueError(f"The most recent volume of detergent used ({last_wash_volume}) "
                              f"exceeds the (expected) volume left ({CONFIG["bottle_volume"] - volume_used})")
@@ -212,8 +233,35 @@ if (n_cups := kwargs["n_cups"]) is not None:
     print("Recorded successfully!")
 ###############################
 
+######## status flag logic ########
 if kwargs["status"]:
-    print("Here is your status report!")
+    from datetime import datetime
+
+    CONFIG: dict[str, float] = load_config()
+    db_path: str = "./database/database.db"
+    init_database(db_path)
+    with sqlite3.connect(db_path, isolation_level=None) as conn:
+        # noinspection SqlNoDataSourceInspection
+        res = conn.execute("""
+        SELECT
+            MIN(date) AS first_timestamp,
+            SUM(volume_used) AS total_used
+        FROM usage_data;
+        """).fetchone()
+
+        first_timestamp: int = res[0] or datetime.now().strftime("%s")
+        earliest_date: str = datetime.fromtimestamp(first_timestamp).strftime("%d.%m.%Y")
+
+        total_used: float = res[1] or 0.0
+
+    if res[0] is not None:
+        print(f"First use of the current detergent was on {earliest_date}.\n")
+
+    print(f"As of {datetime.now().strftime("%d.%m.%Y")}, {round(total_used / CONFIG["bottle_volume"] * 100, 2)}% "
+          f"({total_used}L / {CONFIG["bottle_volume"]}L) of the detergent should have been used.")
+    print(display_load(1 - (total_used / CONFIG["bottle_volume"])))
+############################
+
 
 if kwargs["reset"] and input("Do you really want to delete all your data [n/Y]: ") == "Y":
     print("Deleting data")
