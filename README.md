@@ -1,9 +1,9 @@
 # Tracker of Detergent Usage
 
 **What:** This app has been created to track usage of your detergent.\
-**Why:** In case someone were to systematically snatches it.
+**Why:** In case someone were to systematically snatch it.
 
-Before using the app, I strongly advice to fill the config file (`CONFIG.json`) and attach it, otherwise the app will
+Before using the app, I strongly advice to fill the config file (`CONFIG.json`) and not change its name and / or location, otherwise the app will
 work in an unexpected way or not run at all. The following options are available:
 
 ```json
@@ -13,7 +13,7 @@ work in an unexpected way or not run at all. The following options are available
 }
 ```
 
-(Unit of volume: whatever as long as consistent over all parameters.)
+(Unit of volume: whatever, as long as consistent over all parameters.)
 
 Adding other options will result in an error, which can be fixed automatically by using `--reset` flag and resetting the
 config.
