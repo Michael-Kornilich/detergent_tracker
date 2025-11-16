@@ -262,7 +262,7 @@ if kwargs["status"]:
         print(f"First use of the current detergent was on {earliest_date}.\n")
 
     print(f"As of {datetime.now().strftime("%d.%m.%Y")}, {round(total_used / CONFIG["bottle_volume"] * 100, 2)}% "
-          f"({total_used}L / {CONFIG["bottle_volume"]}L) of the detergent should have been used.")
+          f"({round(total_used, 2)}L / {CONFIG["bottle_volume"]}L) of the detergent should have been used.")
     print(display_load(1 - (total_used / CONFIG["bottle_volume"])))
 ############################
 
